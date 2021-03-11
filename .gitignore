@@ -1,0 +1,6 @@
+*.pyc
+*.vscode
+_pycache_
+*.log
+*.csv
+venv/

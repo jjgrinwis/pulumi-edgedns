@@ -1,0 +1,2 @@
+config:
+  akamai:dnsSection: dns
