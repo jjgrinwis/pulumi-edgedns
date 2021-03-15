@@ -58,15 +58,13 @@ def create_record(record, zone):
     # making use of the pulumi Output object zone.zone for the zone so we create a depency between the zone resource and dns record
     # we need to wait until resource has been created.
     if row[TYPE] not in ["SRV", "MX"]:
-        return pulumi.Output.from_input(
-            akamai.DnsRecord(
-                resource_name,
-                recordtype=record[TYPE],
-                ttl=int(ttl),
-                zone=zone.zone,
-                name=record[NAME],
-                targets=targets,
-            )
+        return akamai.DnsRecord(
+            resource_name,
+            recordtype=record[TYPE],
+            ttl=int(ttl),
+            zone=zone.zone,
+            name=record[NAME],
+            targets=targets,
         )
 
     if row[TYPE] == "SRV":
@@ -76,31 +74,28 @@ def create_record(record, zone):
         # 1 443 sipdir.online.lync.com;100
         srv_record = record[TARGET].split()
 
-        return pulumi.Output.from_input(
-            akamai.DnsRecord(
-                resource_name,
-                recordtype=record[TYPE],
-                ttl=int(ttl),
-                zone=zone.zone,
-                name=record[NAME],
-                priority=int(record[WEIGHT]),
-                weight=int(srv_record[0]),
-                port=int(srv_record[1]),
-                targets=srv_record[2].split(),
-            )
+        return akamai.DnsRecord(
+            resource_name,
+            recordtype=record[TYPE],
+            ttl=int(ttl),
+            zone=zone.zone,
+            name=record[NAME],
+            priority=int(record[WEIGHT]),
+            weight=int(srv_record[0]),
+            port=int(srv_record[1]),
+            targets=srv_record[2].split(),
         )
+
     # MX records need seperate priority field
     if row[TYPE] == "MX":
-        return pulumi.Output.from_input(
-            akamai.DnsRecord(
-                resource_name,
-                recordtype=record[TYPE],
-                ttl=int(ttl),
-                zone=zone.zone,
-                name=record[NAME],
-                targets=targets,
-                priority=int(record[WEIGHT]),
-            )
+        return akamai.DnsRecord(
+            resource_name,
+            recordtype=record[TYPE],
+            ttl=int(ttl),
+            zone=zone.zone,
+            name=record[NAME],
+            targets=targets,
+            priority=int(record[WEIGHT]),
         )
 
 
