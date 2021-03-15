@@ -22,16 +22,14 @@ def create_zone(zone, contract_id, group_id):
     # https://www.pulumi.com/docs/reference/pkg/akamai/dnszone/
     # if you see Create_Handler errors that's probably because zone is still in EdgedDNS but not as pulumi resource!
 
-    return pulumi.Output.from_input(
-        akamai.DnsZone(
-            zone,
-            comment="managed by pulumi",
-            contract=contract_id,
-            group=group_id,
-            sign_and_serve=False,
-            type="primary",
-            zone=zone,
-        )
+    return akamai.DnsZone(
+        zone,
+        comment="managed by pulumi",
+        contract=contract_id,
+        group=group_id,
+        sign_and_serve=False,
+        type="primary",
+        zone=zone,
     )
 
 
