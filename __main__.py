@@ -43,7 +43,7 @@ def create_record(record, zone):
     # we use pulumi output object as we need to wait for the promise from the DnsZone call
 
     if len(record) != 6:
-        print("something wrong, not creating record: {}".format(record))
+        pulumi.warn("something wrong, not creating record: {}".format(record))
         return ()
 
     # set default ttl in case it's not configured or just return, check with customer as some records don't have a TTL
