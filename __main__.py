@@ -104,6 +104,12 @@ def create_record(record, zone):
         )
 
 
+# A pulumi project can have different stack which it's own state.
+# select file with zones from stack config
+# "pulumi config set filename zones.csv"
+config = pulumi.Config()
+filename = config.require("filename")
+
 # In Akamai you have an account with a unique name and account id.
 # Each account has one or more contracts each with an unique id.
 # A contract will have multiple Akamai Products assigned to it, like EdgeDNS, ION etc.
@@ -111,12 +117,6 @@ def create_record(record, zone):
 # By default the main group name is combination of account name with contract id.
 # Before we can start we need to have the approriate contract- and group id.
 # This information can be found in the Akamai Control center under "contracts"
-
-# select file with zones from stack config
-# "pulumi config set filename zones.csv"
-config = pulumi.Config()
-filename = config.require("filename")
-
 # can be found via  "akamai pm lg -f json" but set if via our config set.
 group_name = config.require("group_name")
 
