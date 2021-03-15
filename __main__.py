@@ -120,7 +120,8 @@ group_name = config.require("group_name")
 # we should get same results as with "akamai pm lc --section [section]"
 # we only need id and we're only using first entry from contacts list
 # https://www.pulumi.com/docs/reference/pkg/akamai/getcontracts/
-# return value will be a Pulumi Output object so we can build depency graph
+# return value will be a Pulumi Output object so we can build dependency graph
+# we don't need it but just to show how to use Output.from_input()
 contract_id = pulumi.Output.from_input(akamai.get_contracts()).contracts[0].contract_id
 
 # now lookup group_id: https://www.pulumi.com/docs/reference/pkg/akamai/getgroup/
