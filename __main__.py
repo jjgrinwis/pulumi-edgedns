@@ -28,6 +28,10 @@ TTL = 5
 # can be found via  "akamai pm lg -f json"
 group_name = "GSS Training Internal-C-1IE2OHM"
 
+# select file from stack
+config = pulumi.Config()
+filename = config.require("filename")
+
 # let's first lookup the contract_id assigned to the API key coming from from .edgerc
 # to select correct api user use "pulumi config set akamai:dnsSection|akamai:propertySection [section]"
 # we should get same results as with "akamai pm lc --section [section]"
@@ -49,7 +53,7 @@ group_id = pulumi.Output.from_input(
 def create_zone(zone, contract_id, group_id):
     # when we have a contract_id and group_id, let's create a new EdgeDNS resource
     # https://www.pulumi.com/docs/reference/pkg/akamai/dnszone/
-    # if you see Create_Handler errors that's probably because zone is still in EdgedDNS but not as pulumi resource
+    # if you see Create_Handler errors that's probably because zone is still in EdgedDNS but not as pulumi resource!
 
     return pulumi.Output.from_input(
         akamai.DnsZone(
@@ -68,8 +72,9 @@ def create_record(record, zone):
     # let's create the DNS records, every record has it's own setup of requirements
     # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
     # we should get an array with the following fields
-    # we use pulumi output object as we need to wait for the promise from the DnsZone call
     # zone;name;record;target;priority;ttl
+    # we use pulumi output object as we need to wait for the promise from the DnsZone call
+
     if len(record) != 6:
         print("something wrong, not creating record: {}".format(record))
         return ()
@@ -133,7 +138,7 @@ def create_record(record, zone):
 
 
 zones = []
-with open("zones.csv", newline="") as csv_file:
+with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
     for row in csv_reader:
         # only create a zone if not already confgured

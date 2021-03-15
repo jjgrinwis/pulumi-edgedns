@@ -1,0 +1,3 @@
+config:
+  akamai:dnsSection: dns
+  pulumi-dns:filename: zones.csv
