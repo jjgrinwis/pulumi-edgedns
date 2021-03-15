@@ -134,7 +134,6 @@ group_id = pulumi.Output.from_input(
     akamai.get_group(contract_id=contract_id, group_name=group_name).id
 )
 
-
 zones = []
 with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
