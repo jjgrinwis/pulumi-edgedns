@@ -16,7 +16,8 @@ TARGET = 3
 WEIGHT = 4
 TTL = 5
 
-
+# quick hack to solve issues where we have to put multiple records into one
+# in a next version we should clean it up and make some nice zone/record objects etc.
 class DnsRecord:
     def __init__(self, resource_name, zone, record):
 
@@ -60,6 +61,7 @@ class DnsRecord:
             # 100 1 5061 sipfed.online.lync.com.
             # in the .csv it's configured like this
             # 1 443 sipdir.online.lync.com;100
+            # only taking first part into account.
             srv_record = self.targets[0].split()
 
             return akamai.DnsRecord(
@@ -74,7 +76,7 @@ class DnsRecord:
                 targets=srv_record[2].split(),
             )
 
-        # MX records need seperate priority field
+        # MX records need separate priority field
         if self.type == "MX":
             return akamai.DnsRecord(
                 self.resource_name,
@@ -134,7 +136,7 @@ group_id = pulumi.Output.from_input(
     akamai.get_group(contract_id=contract_id, group_name=group_name).id
 )
 
-# our zone dict will contain key of zones and list of dnsrecord objects.
+# our zone dict will contain key of zones and list of DnsRecord objects.
 zones = {}
 with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
@@ -153,11 +155,12 @@ with open(filename, newline="") as csv_file:
         if row[TYPE] in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA"]:
             record_modified = False
 
-            # some records have the same name but we added weight as MX needs three different records.
+            # some records have the same name but we added weight as MX needs three different resource records.
             resource_name = "{}-{}{}".format(row[NAME], row[TYPE], row[WEIGHT])
 
             # check if we have seen this record before
-            # if so, we only need to add the target to targets field
+            # if so, we only need to append the target to targets field
+            # during our tests no need to change format of the txt input, pulumi is taking care of that
             for record in zones[row[ZONE]]:
                 if record.resource_name == resource_name:
                     record.append_target(row[TARGET])
