@@ -17,6 +17,76 @@ WEIGHT = 4
 TTL = 5
 
 
+class DnsRecord:
+    def __init__(self, resource_name, zone, record):
+
+        self.resource_name = resource_name
+        self.name = record[NAME]
+        self.type = record[TYPE]
+        self.targets = []
+        self.ttl = int(row[len(row) - 1] or 3600)
+        self.zone = zone
+
+        # only set weight if it's really set
+        if record[WEIGHT]:
+            self.weight = int(record[WEIGHT])
+
+        self.targets.append(record[TARGET])
+
+    def append_target(self, target):
+        self.targets.append(target)
+
+    def create_record(self):
+        # let's create the DNS records, every record has it's own setup of requirements
+        # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
+        # we should get an array with the following fields
+        # zone;name;record;target;priority;ttl
+        # we use pulumi output object as we need to wait for the promise from the DnsZone call
+
+        # making use of the pulumi Output object zone.zone for the zone so we create a depency between the zone resource and dns record
+        # we need to wait until resource has been created.
+        if self.type not in ["SRV", "MX"]:
+            return akamai.DnsRecord(
+                self.resource_name,
+                recordtype=self.type,
+                ttl=self.ttl,
+                zone=self.zone.zone,
+                name=self.name,
+                targets=self.targets,
+            )
+
+        if self.type == "SRV":
+            # this is our special SRV record, we need to add priority, weight, port, target
+            # 100 1 5061 sipfed.online.lync.com.
+            # in the .csv it's configured like this
+            # 1 443 sipdir.online.lync.com;100
+            srv_record = self.targets[0].split()
+
+            return akamai.DnsRecord(
+                self.resource_name,
+                recordtype=self.type,
+                ttl=self.ttl,
+                zone=self.zone.zone,
+                name=self.name,
+                priority=self.weight,
+                weight=int(srv_record[0]),
+                port=int(srv_record[1]),
+                targets=srv_record[2].split(),
+            )
+
+        # MX records need seperate priority field
+        if self.type == "MX":
+            return akamai.DnsRecord(
+                self.resource_name,
+                recordtype=self.type,
+                ttl=self.ttl,
+                zone=self.zone.zone,
+                name=self.name,
+                targets=self.targets,
+                priority=self.weight,
+            )
+
+
 def create_zone(zone, contract_id, group_id):
     # when we have a contract_id and group_id, let's create a new EdgeDNS resource
     # https://www.pulumi.com/docs/reference/pkg/akamai/dnszone/
@@ -31,70 +101,6 @@ def create_zone(zone, contract_id, group_id):
         type="primary",
         zone=zone,
     )
-
-
-def create_record(record, zone):
-    # let's create the DNS records, every record has it's own setup of requirements
-    # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
-    # we should get an array with the following fields
-    # zone;name;record;target;priority;ttl
-    # we use pulumi output object as we need to wait for the promise from the DnsZone call
-
-    if len(record) != 6:
-        pulumi.warn("something wrong, not creating record: {}".format(record))
-        return ()
-
-    # set default ttl in case it's not configured or just return, check with customer as some records don't have a TTL
-    ttl = record[TTL] or 3600
-
-    # multiple targets are probably split with a ',' but need to double check this!
-    targets = record[TARGET].split(",")
-
-    # our unique resource name
-    resource_name = "{}-{}-{}".format(record[NAME], record[TYPE], record[TARGET])
-
-    # making use of the pulumi Output object zone.zone for the zone so we create a depency between the zone resource and dns record
-    # we need to wait until resource has been created.
-    if row[TYPE] not in ["SRV", "MX"]:
-        return akamai.DnsRecord(
-            resource_name,
-            recordtype=record[TYPE],
-            ttl=int(ttl),
-            zone=zone.zone,
-            name=record[NAME],
-            targets=targets,
-        )
-
-    if row[TYPE] == "SRV":
-        # this is our special SRV record, we need to add priority, weight, port, target
-        # 100 1 5061 sipfed.online.lync.com.
-        # in the .csv it's configured like this
-        # 1 443 sipdir.online.lync.com;100
-        srv_record = record[TARGET].split()
-
-        return akamai.DnsRecord(
-            resource_name,
-            recordtype=record[TYPE],
-            ttl=int(ttl),
-            zone=zone.zone,
-            name=record[NAME],
-            priority=int(record[WEIGHT]),
-            weight=int(srv_record[0]),
-            port=int(srv_record[1]),
-            targets=srv_record[2].split(),
-        )
-
-    # MX records need seperate priority field
-    if row[TYPE] == "MX":
-        return akamai.DnsRecord(
-            resource_name,
-            recordtype=record[TYPE],
-            ttl=int(ttl),
-            zone=zone.zone,
-            name=record[NAME],
-            targets=targets,
-            priority=int(record[WEIGHT]),
-        )
 
 
 # A pulumi project can have different stack which it's own state.
@@ -128,19 +134,44 @@ group_id = pulumi.Output.from_input(
     akamai.get_group(contract_id=contract_id, group_name=group_name).id
 )
 
-zones = []
+# our zone dict will contain key of zones and list of dnsrecord objects.
+zones = {}
 with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
     for row in csv_reader:
         # only try to create a zone if not already confgured
-        if row[ZONE] and row[ZONE] not in zones:
+        if row[ZONE] and row[ZONE] not in zones.keys():
             my_zone = create_zone(row[ZONE], contract_id, group_id)
-            zones.append(row[ZONE])
+            # intialize our zones with records
+            # print(f"adding zone: {row[ZONE]}")
+            zones[row[ZONE]] = []
 
         # for now only add these common records and more records can be added but double check needed fields
         # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
+        # https://registry.terraform.io/providers/akamai/akamai/latest/docs/resources/dns_record
         # we can skip SOA and NS records as they are created during the create_zone call
-        if row[TYPE] in ["A", "CNAME", "TXT", "MX", "SRV"]:
-            my_record = create_record(row, my_zone)
+        if row[TYPE] in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA"]:
+            record_modified = False
 
-# pulumi.export("zone", my_zone)
+            # some records have the same name but we added weight as MX needs three different records.
+            resource_name = "{}-{}{}".format(row[NAME], row[TYPE], row[WEIGHT])
+
+            # check if we have seen this record before
+            # if so, we only need to add the target to targets field
+            for record in zones[row[ZONE]]:
+                if record.resource_name == resource_name:
+                    record.append_target(row[TARGET])
+                    record_modified = True
+                    break  # no need to look futher, break out of the for loop.
+
+            # if it's a new record, add it.
+            if record_modified == False:
+                # print(f"adding record: {row}")
+                record = DnsRecord(resource_name, my_zone, row)
+                zones[row[ZONE]].append(record)
+
+# zones should be created, let's create some dnsrecords
+for zone in zones:
+    for records in zones[zone]:
+        my_record = records.create_record()
+        # pulumi.export("record", my_record)
