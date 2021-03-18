@@ -16,6 +16,9 @@ TARGET = 3
 WEIGHT = 4
 TTL = 5
 
+# limit of the string lengt we can add to certain records via the API
+LIMIT = 250
+
 # quick hack to solve issues where we have to put multiple records into one
 # in a next version we should clean it up and make some nice zone/record objects etc.
 class DnsRecord:
@@ -25,12 +28,16 @@ class DnsRecord:
         self.name = record[NAME]
         self.type = record[TYPE]
         self.targets = []
+
+        # we have seen records with have some extra empty fields.
+        # last field is always ttl field and should always be set so using that one.
         self.ttl = int(row[len(row) - 1] or 3600)
         self.zone = zone
 
         if record[WEIGHT]:
             self.weight = int(record[WEIGHT])
 
+        # print(f"adding: {record[TARGET]}")
         self.targets.append(record[TARGET])
 
     def append_target(self, target):
@@ -136,7 +143,7 @@ group_id = pulumi.Output.from_input(
     akamai.get_group(contract_id=contract_id, group_name=group_name).id
 )
 
-# our zone dict will contain key of unique zones and list of DnsRecord objects.
+# our zones dict will contain key of unique zones and list of DnsRecord objects.
 zones = {}
 with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
@@ -151,7 +158,11 @@ with open(filename, newline="") as csv_file:
         # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
         # https://registry.terraform.io/providers/akamai/akamai/latest/docs/resources/dns_record
         # we can skip SOA and NS records as they are created during the create_zone call
-        if row[TYPE] in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA"]:
+        # during testing some really long TXT records failed to be applied so we're setting a limit of 250,
+        if (
+            row[TYPE] in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA"]
+            and len(row[TARGET]) < LIMIT
+        ):
             record_modified = False
 
             # some records have the same name but we added weight as MX needs three different resource records.
@@ -171,6 +182,9 @@ with open(filename, newline="") as csv_file:
                 # print(f"adding record: {row}")
                 record = DnsRecord(resource_name, my_zone, row)
                 zones[row[ZONE]].append(record)
+        else:
+            if len(row[TARGET]) > LIMIT:
+                pulumi.warn(f"record too long for API: {row[NAME]} {row[TYPE]}")
 
 # zones should have be created, let's create some dnsrecords
 for zone in zones:
