@@ -28,7 +28,6 @@ class DnsRecord:
         self.ttl = int(row[len(row) - 1] or 3600)
         self.zone = zone
 
-        # only set weight if it's really set
         if record[WEIGHT]:
             self.weight = int(record[WEIGHT])
 
