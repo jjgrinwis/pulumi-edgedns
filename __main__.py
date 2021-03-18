@@ -35,6 +35,7 @@ class DnsRecord:
         self.targets.append(record[TARGET])
 
     def append_target(self, target):
+        # we can extend this method to so some more checks like look for double entries etc.
         self.targets.append(target)
 
     def create_record(self):
@@ -136,7 +137,7 @@ group_id = pulumi.Output.from_input(
     akamai.get_group(contract_id=contract_id, group_name=group_name).id
 )
 
-# our zone dict will contain key of zones and list of DnsRecord objects.
+# our zone dict will contain key of unique zones and list of DnsRecord objects.
 zones = {}
 with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
@@ -144,8 +145,7 @@ with open(filename, newline="") as csv_file:
         # only try to create a zone if not already confgured
         if row[ZONE] and row[ZONE] not in zones.keys():
             my_zone = create_zone(row[ZONE], contract_id, group_id)
-            # intialize our zones with records
-            # print(f"adding zone: {row[ZONE]}")
+            # intialize our zones with empty records list
             zones[row[ZONE]] = []
 
         # for now only add these common records and more records can be added but double check needed fields
@@ -158,8 +158,8 @@ with open(filename, newline="") as csv_file:
             # some records have the same name but we added weight as MX needs three different resource records.
             resource_name = "{}-{}{}".format(row[NAME], row[TYPE], row[WEIGHT])
 
-            # check if we have seen this record before
-            # if so, we only need to append the target to targets field
+            # check if we have seen this record DnsRecord object before
+            # if so, we only need to append the target to targets list field of this object
             # during our tests no need to change format of the txt input, pulumi is taking care of that
             for record in zones[row[ZONE]]:
                 if record.resource_name == resource_name:
@@ -167,13 +167,13 @@ with open(filename, newline="") as csv_file:
                     record_modified = True
                     break  # no need to look futher, break out of the for loop.
 
-            # if it's a new record, add it.
+            # if it's a new record, add it to the targets object list.
             if record_modified == False:
                 # print(f"adding record: {row}")
                 record = DnsRecord(resource_name, my_zone, row)
                 zones[row[ZONE]].append(record)
 
-# zones should be created, let's create some dnsrecords
+# zones should have be created, let's create some dnsrecords
 for zone in zones:
     for records in zones[zone]:
         my_record = records.create_record()
