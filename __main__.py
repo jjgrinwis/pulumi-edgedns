@@ -145,6 +145,7 @@ group_id = pulumi.Output.from_input(
 
 # our zones dict will contain key of unique zones and list of DnsRecord objects.
 zones = {}
+missed_records = []
 with open(filename, newline="") as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=";")
     for row in csv_reader:
@@ -185,9 +186,12 @@ with open(filename, newline="") as csv_file:
         else:
             if len(row[TARGET]) > LIMIT:
                 pulumi.warn(f"record too long for API: {row[NAME]} {row[TYPE]}")
+                missed_records.append(row)
 
 # zones should have be created, let's create some dnsrecords
 for zone in zones:
     for records in zones[zone]:
         my_record = records.create_record()
         # pulumi.export("record", my_record)
+
+pulumi.export("missed_records", missed_records)
