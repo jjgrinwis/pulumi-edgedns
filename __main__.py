@@ -16,7 +16,8 @@ TARGET = 3
 WEIGHT = 4
 TTL = 5
 
-# limit of the string lengt we can add to certain records via the API
+# limit of the string length we can add to certain records via the API
+# API is failing if record lenght is too long.
 LIMIT = 250
 
 # quick hack to solve issues where we have to put multiple records into one
