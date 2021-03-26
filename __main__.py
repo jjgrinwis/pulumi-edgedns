@@ -4,8 +4,9 @@ import pulumi
 import pulumi_akamai as akamai
 import lookup_zones
 
-# limit of the string length we can add to certain records via the API
+# default TTL and limit of the string length we can add to certain records via the API
 # API is failing if record lenght is too long.
+TTL = 3600
 LIMIT = 250
 
 # quick hack to solve issues where we have to put multiple records into one
@@ -19,9 +20,8 @@ class DnsRecord:
         self.type = record["type"]
         self.targets = []
 
-        # we have seen records with have some extra empty fields.
-        # last field is always ttl field and should always be set so using that one.
-        self.ttl = int(record.get("ttl", 3600))
+        # ttl field and should always be set, if not use 3600
+        self.ttl = int(record.get("ttl", TTL))
 
         # zone is a pulumi Output object
         self.zone = zone
