@@ -142,13 +142,7 @@ group_id = pulumi.Output.from_input(
 
 # our new version looking up records from the provider on-demand, no need to send .csv's around
 # list can come from pulumi stack config, a file or just form the list below
-zone_list = [
-    "duiknieuws.nl",
-    "fahrradferien.nl",
-    "zorgvakantiesgelderland.nl",
-    "vvf-vakanties.nl",
-    "cochemresort.de",
-]
+zone_list = ["grinwis.nl"]
 
 # our list of EdgeDNS objects to be created for this zone
 # we're using a dict of dicts to make the lookup easy.
@@ -198,6 +192,8 @@ for zone in zone_list:
                 pulumi.warn(
                     f"record too long for API: {record['name']} {record['type']}"
                 )
+    else:
+        pulumi.warn("no records found to migrate")
 
 # so we should have already created the zone, lets add the records which should have been normalized for EdgeDNS.
 for resource in resource_list:
