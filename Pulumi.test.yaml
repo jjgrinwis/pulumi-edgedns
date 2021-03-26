@@ -1,4 +1,4 @@
 config:
   akamai:dnsSection: dns
-  pulumi-dns:filename: roompot-nl.csv
+  pulumi-dns:filename: zones.csv
   pulumi-dns:group_name: GSS Training Internal-C-1IE2OHM

@@ -4,6 +4,19 @@ import pulumi
 import pulumi_akamai as akamai
 import lookup_zones
 
+# zone records are delivered in .csv format
+# zone;name;type;target;weight;ttl
+# grinwis.com;grinwis.com;MX;grinwis-nl.mail.protection.outlook.com;10;900
+import csv
+
+# let's define some static fields
+ZONE = 0
+NAME = 1
+TYPE = 2
+TARGET = 3
+WEIGHT = 4
+TTL = 5
+
 # limit of the string length we can add to certain records via the API
 # API is failing if record lenght is too long.
 LIMIT = 250
@@ -12,33 +25,30 @@ LIMIT = 250
 # in a next version we should clean it up and make some nice zone/record objects etc.
 class DnsRecord:
     def __init__(self, resource_name, zone, record):
-        """ this will initialize a DnsRecord object but won't create the record. """
 
         self.resource_name = resource_name
-        self.name = record["name"]
-        self.type = record["type"]
+        self.name = record[NAME]
+        self.type = record[TYPE]
 
         # create an empty set as we only need unique entries
         self.targets = list()
 
         # we have seen records with have some extra empty fields.
         # last field is always ttl field and should always be set so using that one.
-        self.ttl = int(record.get("ttl", 3600))
-
-        # zone is a pulumi Output object
+        self.ttl = int(row[len(row) - 1] or 3600)
         self.zone = zone
 
-        # not all records have a prio set, so set of None if key not available
-        self.prio = record.get("prio", None)
+        if record[WEIGHT]:
+            self.weight = int(record[WEIGHT])
 
-        self.append_target(record["value"])
+        # print(f"adding: {record[TARGET]}")
+        self.append_target(record[TARGET])
 
-    def append_target(self, value):
+    def append_target(self, target):
         # we can extend this method to so some more checks like look for double entries etc.
-        self.targets.append(value)
+        self.targets.append(target)
 
     def create_record(self):
-        """this will method will use info from object to add it to edgedns """
         # let's create the DNS records, every record has it's own setup of requirements
         # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
         # we should get an array with the following fields
@@ -71,7 +81,7 @@ class DnsRecord:
                 ttl=self.ttl,
                 zone=self.zone.zone,
                 name=self.name,
-                priority=self.prio,
+                priority=self.weight,
                 weight=int(srv_record[0]),
                 port=int(srv_record[1]),
                 targets=srv_record[2].split(),
@@ -86,12 +96,11 @@ class DnsRecord:
                 zone=self.zone.zone,
                 name=self.name,
                 targets=self.targets,
-                priority=self.prio,
+                priority=self.weight,
             )
 
 
 def create_zone(zone, contract_id, group_id):
-    """ create an EdgeDNS zone, we need name, contract_id and group_id"""
     # when we have a contract_id and group_id, let's create a new EdgeDNS resource
     # https://www.pulumi.com/docs/reference/pkg/akamai/dnszone/
     # if you see Create_Handler errors that's probably because zone is still in EdgedDNS but not as pulumi resource!
@@ -139,68 +148,54 @@ group_id = pulumi.Output.from_input(
 )
 
 # our zones dict will contain key of unique zones and list of DnsRecord objects.
-
-# our new version looking up records from the provider on-demand, no need to send .csv's around
-# list can come from pulumi stack config, a file or just form the list below
-zone_list = [
-    "duiknieuws.nl",
-    "fahrradferien.nl",
-    "zorgvakantiesgelderland.nl",
-    "vvf-vakanties.nl",
-    "cochemresort.de",
-]
-
-# our list of EdgeDNS objects to be created for this zone
-# we're using a dict of dicts to make the lookup easy.
-resource_list = {}
+zones = {}
 missed_records = []
+with open(filename, newline="") as csv_file:
+    csv_reader = csv.reader(csv_file, delimiter=";")
+    for row in csv_reader:
+        # only try to create a zone if not already confgured
+        if row[ZONE] and row[ZONE] not in zones.keys():
+            my_zone = create_zone(row[ZONE], contract_id, group_id)
+            # intialize our zones with empty records list
+            zones[row[ZONE]] = []
 
-# initiate a connection to OpenProvider API
-# set set the environment vars in our venv/bin/activate file
-# export OPENPROVIDER_USERNAME=username
-# export OPENPROVIDER_PASSWORD=password
-op = lookup_zones.OpenProvider()
+        # for now only add these common records and more records can be added but double check needed fields
+        # https://www.pulumi.com/docs/reference/pkg/akamai/dnsrecord/
+        # https://registry.terraform.io/providers/akamai/akamai/latest/docs/resources/dns_record
+        # we can skip SOA and NS records as they are created during the create_zone call
+        # during testing some really long TXT records failed to be applied so we're setting a limit of 250,
+        if (
+            row[TYPE] in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA", "AKAMAICDN"]
+            and len(row[TARGET]) < LIMIT
+        ):
+            record_modified = False
 
-for zone in zone_list:
-    # first get all records, if zone is empty no need to create a zone
-    all_records = op.get_zone(zone)
+            # some records have the same name but we added weight as MX needs three different resource records.
+            resource_name = "{}-{}{}".format(row[NAME], row[TYPE], row[WEIGHT])
 
-    if len(all_records) > 0:
-        # we have some records, create new zone in EdgeDNS using Pulumi Akamai Provider
-        # test test create temp zone
-        pulumi_zone = create_zone(zone, contract_id, group_id)
+            # check if we have seen this record DnsRecord object before
+            # if so, we only need to append the target to targets list field of this object
+            # during our tests no need to change format of the txt input, pulumi is taking care of that
+            for record in zones[row[ZONE]]:
+                if record.resource_name == resource_name:
+                    record.append_target(row[TARGET])
+                    record_modified = True
+                    break  # no need to look futher, break out of the for loop.
 
-        for record in all_records:
-            # now lets add all our records to this zone
-            # first check if it's a record we support and value is not too long
-            if (
-                record["type"]
-                in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA", "AKAMAICDN"]
-                and len(record["value"]) < LIMIT
-            ):
+            # if it's a new record, add it to the targets object list.
+            if record_modified == False:
+                # print(f"adding record: {row}")
+                record = DnsRecord(resource_name, my_zone, row)
+                zones[row[ZONE]].append(record)
+        else:
+            if len(row[TARGET]) > LIMIT:
+                pulumi.warn(f"record too long for API: {row[NAME]} {row[TYPE]}")
+                missed_records.append(row)
 
-                # as not all records have a weight, make it empty or assign the value
-                prio = record.get("prio", "")
-                resource_name = "{}-{}{}".format(record["name"], record["type"], prio)
-
-                # resource_name is unique key in our dict
-                if resource_name in resource_list.keys():
-                    # if we have already seen this resource, modify existing target value of the object
-                    dns_record = resource_list[resource_name]
-                    dns_record.append_target(record["value"])
-                else:
-                    # this is a new resource, let's create it and add to the dict
-                    dns_record = DnsRecord(resource_name, pulumi_zone, record)
-                    resource_list[resource_name] = dns_record
-
-            elif len(record["value"]) > LIMIT:
-                missed_records.append(record)
-                pulumi.warn(
-                    f"record too long for API: {record['name']} {record['type']}"
-                )
-
-# so we should have already created the zone, lets add the records which should have been normalized for EdgeDNS.
-for resource in resource_list:
-    resource_list[resource].create_record()
+# zones should have be created, let's create some dnsrecords
+for zone in zones:
+    for records in zones[zone]:
+        my_record = records.create_record()
+        # pulumi.export("record", my_record)
 
 pulumi.export("missed_records", missed_records)
