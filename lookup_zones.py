@@ -6,6 +6,10 @@
 import requests
 import os
 import json
+import urllib3
+
+# we  don't care about cert errors for now, migration only
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class OpenProvider:
@@ -55,7 +59,7 @@ class OpenProvider:
         if result.ok:
             # convert json to dict and assign token, will fail if no answer.
             self.token = result.json()["data"]["token"]
-            print(f"token: {self.token}")
+            # print(f"token: {self.token}")
         else:
             raise Exception("username or password wrong")
 
@@ -101,7 +105,9 @@ class OpenProvider:
                 if zone and total_records > 0:
                     # a zone has been defined, let's try to get some info but only if we have some result
                     # as we can get a 200 but with 0 records.
-                    print(f"looking up zone: {zone} with {total_records} records")
+                    print(
+                        f"looking up all records for zone: {zone} which has {total_records} records"
+                    )
                     for record in body["data"]["results"]:
                         # just push DNS dict to all_records list
                         all_records.append(record)

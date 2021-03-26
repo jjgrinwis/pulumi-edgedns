@@ -17,9 +17,7 @@ class DnsRecord:
         self.resource_name = resource_name
         self.name = record["name"]
         self.type = record["type"]
-
-        # create an empty set as we only need unique entries
-        self.targets = list()
+        self.targets = []
 
         # we have seen records with have some extra empty fields.
         # last field is always ttl field and should always be set so using that one.
@@ -91,7 +89,7 @@ class DnsRecord:
 
 
 def create_zone(zone, contract_id, group_id):
-    """ create an EdgeDNS zone, we need name, contract_id and group_id"""
+    """ create an EdgeDNS zone, we need zone name, contract_id and group_id"""
     # when we have a contract_id and group_id, let's create a new EdgeDNS resource
     # https://www.pulumi.com/docs/reference/pkg/akamai/dnszone/
     # if you see Create_Handler errors that's probably because zone is still in EdgedDNS but not as pulumi resource!
@@ -107,11 +105,12 @@ def create_zone(zone, contract_id, group_id):
     )
 
 
-# A pulumi project can have different stack which it's own state.
-# select file with zones from stack config
-# "pulumi config set filename zones.csv"
+# A pulumi project can have different stacks which their own state.
+# select array of zones from stack, these zones will be copied to EdgeDNS
+# $ pulumi config set --path zones[0] grinwis.com
+# $ pulumi config set --path zones[1] grinwis_test.com
 config = pulumi.Config()
-filename = config.require("filename")
+zone_list = config.require_object("zones")
 
 # In Akamai you have an account with a unique name and account id.
 # Each account has one or more contracts each with an unique id.
@@ -137,12 +136,6 @@ contract_id = pulumi.Output.from_input(akamai.get_contracts()).contracts[0].cont
 group_id = pulumi.Output.from_input(
     akamai.get_group(contract_id=contract_id, group_name=group_name).id
 )
-
-# our zones dict will contain key of unique zones and list of DnsRecord objects.
-
-# our new version looking up records from the provider on-demand, no need to send .csv's around
-# list can come from pulumi stack config, a file or just form the list below
-zone_list = ["grinwis.nl"]
 
 # our list of EdgeDNS objects to be created for this zone
 # we're using a dict of dicts to make the lookup easy.
