@@ -96,7 +96,6 @@ class OpenProvider:
             body = result.json()
 
             if result.ok:
-                # only set total_records if not already set
                 # total records is the end of our list so len of all zones should be total zones in the dns provider
                 # both record types are using same structure so also showing total amount of results.
                 if total_records == 1:

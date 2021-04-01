@@ -1,6 +1,7 @@
 config:
   akamai:dnsSection: dns
   pulumi-dns:group_name: GSS Training Internal-C-1IE2OHM
+  pulumi-dns:zone_list: zones.txt
   pulumi-dns:zones:
   - bookonline.nl
   - hogeboomtravel.com

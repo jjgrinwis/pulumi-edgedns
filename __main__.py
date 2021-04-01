@@ -5,9 +5,9 @@ import pulumi_akamai as akamai
 import lookup_zones
 
 # default TTL and limit of the string length we can add to certain records via the API
-# API is failing if record lenght is too long.
+# API is failing if record lenght is too long. TXT records for example have a max of 255 chars.
 TTL = 3600
-LIMIT = 250
+LIMIT = 255
 
 # quick hack to solve issues where we have to put multiple records into one
 # in a next version we should clean it up and make some nice zone/record objects etc.
@@ -26,7 +26,7 @@ class DnsRecord:
         # zone is a pulumi Output object
         self.zone = zone
 
-        # not all records have a prio set, so set of None if key not available
+        # not all records have a prio set, so set to None if key not available
         self.prio = record.get("prio", None)
 
         self.append_target(record["value"])
@@ -109,8 +109,18 @@ def create_zone(zone, contract_id, group_id):
 # select array of zones from stack, these zones will be copied to EdgeDNS
 # $ pulumi config set --path zones[0] grinwis.com
 # $ pulumi config set --path zones[1] grinwis_test.com
+# or use a filename with zones, filename being the preferred optin
 config = pulumi.Config()
-zone_list = config.require_object("zones")
+
+# check if the key is there, it not use zones var.
+filename = config.get("zone_list")
+if filename:
+    # remove newlines from entries in zone filename
+    zone_list = [line.rstrip() for line in open(filename)]
+else:
+    # if zone_list is not configured we require zones list in stack config
+    zone_list = config.require_object("zones")
+
 
 # In Akamai you have an account with a unique name and account id.
 # Each account has one or more contracts each with an unique id.
