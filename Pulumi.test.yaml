@@ -2,4 +2,4 @@ config:
   akamai:dnsSection: dns
   pulumi-dns:group_name: GSS Training Internal-C-1IE2OHM
   pulumi-dns:zones:
-  - roompot.nl
+  - Largoresorts.nl

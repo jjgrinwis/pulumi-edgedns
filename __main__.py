@@ -158,7 +158,8 @@ missed_records = []
 # export OPENPROVIDER_PASSWORD=password
 op = lookup_zones.OpenProvider()
 
-for zone in zone_list:
+# again some list comprehension to do a lowercase of the domain name
+for zone in [item.lower() for item in zone_list]:
     # first get all records, if zone is empty no need to create a zone
     all_records = op.get_zone(zone)
 
@@ -167,13 +168,15 @@ for zone in zone_list:
         pulumi_zone = create_zone(zone, contract_id, group_id)
 
         for record in all_records:
+            # print(f"processing record: {record} ")
             # now lets add all our records to this zone
             # first check if it's a record we support and value is not too long
 
             # we only need to process NS records if they are a subdomain in a zone, not a seperate zone
             if record["type"] == "NS" and record["name"] == zone:
-                print(f"found NS record for TLD {record['name']}, skipping that one")
-                break
+                # print(f"found NS record for TLD {record['name']}, skipping that one")
+                # let's continue with the next record, no need to add this one.
+                continue
 
             if (
                 record["type"]
