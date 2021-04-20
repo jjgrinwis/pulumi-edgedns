@@ -109,18 +109,18 @@ def create_zone(zone, contract_id, group_id):
 # select array of zones from stack, these zones will be copied to EdgeDNS
 # $ pulumi config set --path zones[0] grinwis.com
 # $ pulumi config set --path zones[1] grinwis_test.com
+# $ pulumi config set zones '["grinwis.com", "shadow-it.nl"]'
 # or use a filename with zones, filename being the preferred optin
 config = pulumi.Config()
 
 # check if the key is there, it not use zones var.
 filename = config.get("zone_list")
 if filename:
-    # remove newlines from entries in zone filename
+    # remove newlines from entries in zone filename using list comprehension
     zone_list = [line.rstrip() for line in open(filename)]
 else:
     # if zone_list is not configured we require zones list in stack config
     zone_list = config.require_object("zones")
-
 
 # In Akamai you have an account with a unique name and account id.
 # Each account has one or more contracts each with an unique id.
@@ -163,16 +163,21 @@ for zone in zone_list:
     all_records = op.get_zone(zone)
 
     if len(all_records) > 0:
-        # we have some records, create new zone in EdgeDNS using Pulumi Akamai Provider
-        # test test create temp zone
+        # we have some records, create new zone in EdgeDNS using the Pulumi Akamai Provider
         pulumi_zone = create_zone(zone, contract_id, group_id)
 
         for record in all_records:
             # now lets add all our records to this zone
             # first check if it's a record we support and value is not too long
+
+            # we only need to process NS records if they are a subdomain in a zone, not a seperate zone
+            if record["type"] == "NS" and record["name"] == zone:
+                print(f"found NS record for TLD {record['name']}, skipping that one")
+                break
+
             if (
                 record["type"]
-                in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA", "AKAMAICDN"]
+                in ["A", "CNAME", "TXT", "MX", "SRV", "AAAA", "CAA", "AKAMAICDN", "NS"]
                 and len(record["value"]) < LIMIT
             ):
 
